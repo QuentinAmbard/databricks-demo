@@ -15,7 +15,6 @@ spark.readStream.format("cloudFiles") \
         .trigger(processingTime = "10 seconds") \
         .start()
 
-
 # COMMAND ----------
 
 # MAGIC %sql

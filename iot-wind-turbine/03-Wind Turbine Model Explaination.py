@@ -41,7 +41,7 @@
 
 # DBTITLE 1,Build Training and Test dataset
 from pyspark.ml.feature import StringIndexer, StandardScaler, VectorAssembler
-from pyspark.ml import Pipeline
+from pyspark.ml import Pipeline 
 dataset = spark.read.table("quentin.turbine_gold").orderBy(rand())
 train, test = dataset.limit(1000000).randomSplit([0.8, 0.2])
 

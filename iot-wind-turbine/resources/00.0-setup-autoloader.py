@@ -3,5 +3,5 @@
 
 # COMMAND ----------
 
-dbutils.fs.rm(path+"/turbine/incoming-data-json", True)
+dbutils.fs.rm(path+"/turbine/incoming-data-json", True) 
 spark.read.format("json").option("inferSchema", "true").load("/mnt/quentin-demo-resources/turbine/incoming-data-json").limit(10).repartition(1).write.format("json").mode("overwrite").save(path+"/turbine/incoming-data-json")

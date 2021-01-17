@@ -92,7 +92,7 @@ with mlflow.start_run():
   plt.suptitle("Turbine Damage Prediction. F1={:.2f}".format(metrics.fMeasure(1.0)), fontsize = 18)
   plt.xlabel("Predicted Labels")
   plt.ylabel("True Labels")
-  mlflow.log_figure(fig, "confusion_matrix.png") #Requires MLFlow 1.13: %pip install mlflow==1.13.1
+  mlflow.log_figure(fig, "confusion_matrix.png") #Requires MLFlow 1.13 (%pip install mlflow==1.13.1)
 
 # COMMAND ----------
 

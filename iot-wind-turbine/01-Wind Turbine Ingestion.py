@@ -38,7 +38,7 @@
 
 # DBTITLE 1,Let's explore what is being delivered by our wind turbines stream: (key, json)
 # MAGIC %sql 
-# MAGIC select * from parquet.`/mnt/quentin-demo-resources/turbine/incoming-data`;
+# MAGIC select * from parquet.`/mnt/quentin-demo-resources/turbine/incoming-data`
 
 # COMMAND ----------
 

@@ -5,7 +5,7 @@
 
 from pyspark.sql.functions import rand, input_file_name, from_json, col
 from pyspark.sql.types import *
-
+ 
 from pyspark.ml.feature import StringIndexer, StandardScaler, VectorAssembler
 from pyspark.ml import Pipeline
 

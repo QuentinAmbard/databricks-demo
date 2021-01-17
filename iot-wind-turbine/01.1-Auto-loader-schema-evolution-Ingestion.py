@@ -10,7 +10,7 @@
 
 # DBTITLE 1,Let's explore what is being delivered by our wind turbines stream: (json)
 # MAGIC %sql 
-# MAGIC select * from text.`/mnt/quentin-demo-resources/turbine/incoming-data-json`;
+# MAGIC select * from text.`/mnt/quentin-demo-resources/turbine/incoming-data-json`
 
 # COMMAND ----------
 
