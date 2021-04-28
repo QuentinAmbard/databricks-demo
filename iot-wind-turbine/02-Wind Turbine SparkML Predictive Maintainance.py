@@ -1,11 +1,11 @@
 # Databricks notebook source
 # MAGIC %md-sandbox
-# MAGIC # Wind Turbine Predictive Maintenance
+# MAGIC # Wind Turbine Predictive Maintenance: model training
 # MAGIC 
 # MAGIC In this example, we demonstrate anomaly detection for the purposes of finding damaged wind turbines. A damaged, single, inactive wind turbine costs energy utility companies thousands of dollars per day in losses.
 # MAGIC 
 # MAGIC 
-# MAGIC <img src="https://quentin-demo-resources.s3.eu-west-3.amazonaws.com/images/turbine/turbine_flow.png" />
+# MAGIC <img src="https://github.com/QuentinAmbard/databricks-demo/raw/main/iot-wind-turbine/resources/images/turbine-demo-flow.png" width="90%"/>
 # MAGIC 
 # MAGIC 
 # MAGIC <div style="float:right; margin: -10px 50px 0px 50px">
@@ -26,7 +26,7 @@
 
 # COMMAND ----------
 
-# MAGIC %run ./resources/00-setup $reset_all=$reset_all_data
+# MAGIC %run ./resources/00-setup $reset_all_data=$reset_all_data
 
 # COMMAND ----------
 
@@ -82,7 +82,7 @@ with mlflow.start_run():
   mlflow.log_metric("recall", metrics.recall(1.0))
   mlflow.log_metric("f1", metrics.fMeasure(1.0))
   
-  mlflow.spark.log_model(pipelineTrained, "turbine_gbt")
+  mlflow.spark.log_model(pipelineTrained, "turbine_gbt", input_example={"AN3":-1.4746, "AN4":-1.8042, "AN5":-2.1093, "AN6":-5.1975, "AN7":-0.45691, "AN8":-7.0763, "AN9":-3.3133, "AN10":-0.0059799})
   mlflow.set_tag("model", "turbine_gbt") 
   
   #Add confusion matrix to the model:
@@ -93,6 +93,7 @@ with mlflow.start_run():
   plt.xlabel("Predicted Labels")
   plt.ylabel("True Labels")
   mlflow.log_figure(fig, "confusion_matrix.png") #Requires MLFlow 1.13 (%pip install mlflow==1.13.1)
+  
 
 # COMMAND ----------
 
@@ -103,10 +104,7 @@ with mlflow.start_run():
 # DBTITLE 1,Save our new model to the registry as a new version
 #get the best model having the best metrics.AUROC from the registry
 best_models = mlflow.search_runs(filter_string='tags.model="turbine_gbt" and attributes.status = "FINISHED" and metrics.f1 > 0', order_by=['metrics.f1 DESC'], max_results=1)
-model_uri = best_models.iloc[0].artifact_uri
-print(model_uri)
-model_registered = mlflow.register_model(best_models.iloc[0].artifact_uri+"/turbine_gbt", "turbine_gbt")
-#sleep(5)
+model_registered = mlflow.register_model("runs:/" + best_models.iloc[0].run_id + "/turbine_gbt", "turbine_gbt")
 
 # COMMAND ----------
 
@@ -123,23 +121,21 @@ client.transition_model_version_stage(name = "turbine_gbt", version = model_regi
 # COMMAND ----------
 
 # DBTITLE 1,Load the model from our registry
-import mlflow 
 model_from_registry = mlflow.spark.load_model('models:/turbine_gbt/production')
-udf = mlflow.pyfunc.spark_udf(spark, 'models:/turbine_gbt/production')
 
 # COMMAND ----------
 
-predictions = dataset.withColumn("colPrediction", udf(*dataset.select(*featureCols).columns))
+# DBTITLE 1,Let's call our model and make our predictive maintenance
+predictions = model_from_registry.transform(dataset).select("ID", "prediction")
 display(predictions)
 
 # COMMAND ----------
 
-# DBTITLE 1,Compute predictions using our spark model:
-prediction = model_from_registry.transform(dataset.limit(100))
-display(prediction.select(*featureCols+['prediction']))
-
-# COMMAND ----------
-
 # MAGIC %md
+# MAGIC 
+# MAGIC %md 
 # MAGIC ### We can now explore our prediction in a new dashboard
-# MAGIC https://e2-demo-west.cloud.databricks.com/sql/dashboards/92d8ccfa-10bb-411c-b410-274b64b25520-turbine-demo-predictions?o=2556758628403379
+# MAGIC 
+# MAGIC ![turbine-demo-dashboard](https://github.com/QuentinAmbard/databricks-demo/raw/main/iot-wind-turbine/resources/images/turbine-demo-dashboard2.png)
+# MAGIC 
+# MAGIC [Open SQL Analytics dashboard](https://e2-demo-west.cloud.databricks.com/sql/dashboards/92d8ccfa-10bb-411c-b410-274b64b25520-turbine-demo-predictions?o=2556758628403379)

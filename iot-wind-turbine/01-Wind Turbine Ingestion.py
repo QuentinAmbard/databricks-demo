@@ -5,7 +5,7 @@
 # MAGIC In this example, we demonstrate anomaly detection for the purposes of finding damaged wind turbines. A damaged, single, inactive wind turbine costs energy utility companies thousands of dollars per day in losses.
 # MAGIC 
 # MAGIC 
-# MAGIC <img src="https://quentin-demo-resources.s3.eu-west-3.amazonaws.com/images/turbine/turbine_flow.png" />
+# MAGIC <img src="https://github.com/QuentinAmbard/databricks-demo/raw/main/iot-wind-turbine/resources/images/turbine-demo-flow.png" width="90%"/>
 # MAGIC 
 # MAGIC 
 # MAGIC <div style="float:right; margin: -10px 50px 0px 50px">
@@ -27,7 +27,7 @@
 # COMMAND ----------
 
 # DBTITLE 1,Let's prepare our data first
-# MAGIC %run ./resources/00-setup $reset_all=$reset_all_data
+# MAGIC %run ./resources/00-setup $reset_all_data=$reset_all_data
 
 # COMMAND ----------
 
@@ -43,7 +43,7 @@
 # COMMAND ----------
 
 # MAGIC %sql
-# MAGIC create table if not exists turbine_bronze (key double not null, value string) using delta;
+# MAGIC create table if not exists turbine_bronze (key double not null, value string) using delta ;
 # MAGIC   
 # MAGIC -- Turn on autocompaction to solve small files issues on your streaming job, that's all you have to do!
 # MAGIC alter table turbine_bronze set tblproperties ('delta.autoOptimize.autoCompact' = true, 'delta.autoOptimize.optimizeWrite' = true);
@@ -61,11 +61,9 @@ bronzeDF = spark.readStream \
 #Write the output to a delta table
 bronzeDF.selectExpr("CAST(key AS STRING) as key", "CAST(value AS STRING) as value") \
         .writeStream \
-        .format("delta") \
-        .option("checkpointLocation", "/Users/quentin.ambard@databricks.com/demo/turbine/bronze/_checkpoint") \
-        .option("path", "/Users/quentin.ambard@databricks.com/demo/turbine/bronze/data") \
+        .option("ignoreChanges", "true") \
         .trigger(once=True) \
-        .start()
+        .table("turbine_bronze")
 
 # COMMAND ----------
 
@@ -73,9 +71,10 @@ bronzeDF.selectExpr("CAST(key AS STRING) as key", "CAST(value AS STRING) as valu
 bronzeDF = spark.readStream \
                 .format("cloudFiles") \
                 .option("cloudFiles.format", "parquet") \
+                .option("cloudFiles.maxFilesPerTrigger", 1) \
                 .schema("value string, key double") \
                 .load("/mnt/quentin-demo-resources/turbine/incoming-data") 
-                  
+
 bronzeDF.writeStream \
         .option("ignoreChanges", "true") \
         .trigger(processingTime='10 seconds') \
@@ -109,7 +108,7 @@ spark.readStream.table('turbine_bronze') \
 
 # MAGIC %sql
 # MAGIC -- let's add some constraints in our table, to ensure or ID can't be negative (need DBR 7.5)
-# MAGIC -- ALTER TABLE turbine_silver ADD CONSTRAINT idGreaterThanZero CHECK (id >= 0);
+# MAGIC ALTER TABLE turbine_silver ADD CONSTRAINT idGreaterThanZero CHECK (id >= 0);
 # MAGIC -- let's enable the auto-compaction
 # MAGIC alter table turbine_silver set tblproperties ('delta.autoOptimize.autoCompact' = true, 'delta.autoOptimize.optimizeWrite' = true);
 # MAGIC 
@@ -166,9 +165,9 @@ turbine_stream.join(turbine_status, ['id'], 'left') \
 # COMMAND ----------
 
 # MAGIC %sql
-# MAGIC DESCRIBE HISTORY turbine_gold;
+# MAGIC -- DESCRIBE HISTORY turbine_gold;
 # MAGIC -- If needed, we can go back in time to select a specific version or timestamp
-# MAGIC -- SELECT * FROM turbine_gold TIMESTAMP AS OF '2020-12-01'
+# MAGIC SELECT * FROM turbine_gold TIMESTAMP AS OF '2020-12-01'
 # MAGIC 
 # MAGIC -- And restore a given version
 # MAGIC -- RESTORE turbine_gold TO TIMESTAMP AS OF '2020-12-01'
@@ -179,6 +178,9 @@ turbine_stream.join(turbine_status, ['id'], 'left') \
 # COMMAND ----------
 
 # MAGIC %md 
-# MAGIC ## Our data is ready! Let's create a dashboard to monitor our Turbine plant
+# MAGIC ## Our data is ready! Let's create a dashboard to monitor our Turbine plant using Databricks SQL Analytics
 # MAGIC 
-# MAGIC https://e2-demo-west.cloud.databricks.com/sql/dashboards/a81f8008-17bf-4d68-8c79-172b71d80bf0-turbine-demo?o=2556758628403379
+# MAGIC 
+# MAGIC ![turbine-demo-dashboard](https://github.com/QuentinAmbard/databricks-demo/raw/main/iot-wind-turbine/resources/images/turbine-demo-dashboard1.png)
+# MAGIC 
+# MAGIC [Open SQL Analytics dashboard](https://e2-demo-west.cloud.databricks.com/sql/dashboards/a81f8008-17bf-4d68-8c79-172b71d80bf0-turbine-demo?o=2556758628403379)

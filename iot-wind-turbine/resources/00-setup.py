@@ -1,5 +1,5 @@
 # Databricks notebook source
-# MAGIC %fs ls /datasets
+#dbutils.widgets.dropdown("reset_all_data", "false", ["true", "false"])
 
 # COMMAND ----------
 
@@ -27,20 +27,32 @@ import re
 
 # COMMAND ----------
 
+aws_bucket_name = "quentin-demo-resources"
+mount_name = "quentin-demo-resources"
+
+#dbutils.fs.mount("s3a://%s" % aws_bucket_name, "/mnt/%s" % mount_name)
+try:
+  dbutils.fs.ls("/mnt/%s" % mount_name)
+except:
+  print("bucket isn't mounted, mount the demo bucket under %s" % mount_name)
+  dbutils.fs.mount("s3a://%s" % aws_bucket_name, "/mnt/%s" % mount_name)
+
+# COMMAND ----------
+
 current_user = dbutils.notebook.entry_point.getDbutils().notebook().getContext().tags().apply('user')
 dbName = re.sub(r'\W+', '_', current_user)
 path = "/Users/{}/demo".format(current_user)
 dbutils.widgets.text("path", path, "path")
 dbutils.widgets.text("dbName", dbName, "dbName")
 print("using path {}".format(path))
-spark.sql("""create database if not exists {} LOCATION '{}/turbine/tables' """.format(dbName, path))
+spark.sql("""create database if not exists {} LOCATION '{}/global_demo/tables' """.format(dbName, path))
 spark.sql("""USE {}""".format(dbName))
 
 
 # COMMAND ----------
 
 tables = ["turbine_bronze", "turbine_silver", "turbine_gold", "turbine_power", "turbine_schema_evolution"]
-reset_all = dbutils.widgets.get("reset_all") == "true" or any([not spark.catalog._jcatalog.tableExists(table) for table in ["turbine_power"]])
+reset_all = dbutils.widgets.get("reset_all_data") == "true" or any([not spark.catalog._jcatalog.tableExists(table) for table in ["turbine_power"]])
 if reset_all:
   print("resetting data")
   for table in tables:
