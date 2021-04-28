@@ -24,9 +24,11 @@ Use [Databricks Projects](https://docs.databricks.com/projects.html) to clone th
 * Scale to thousands of model in parallel
 
 
-###Work in progress:
+### Work in progress:
 
 #### Sessionalization (Adtech)
+
+#### Credit risk
 
 #### E-commerce & product classification:
 * Data ingestion (python, SQL)
@@ -35,5 +37,6 @@ Use [Databricks Projects](https://docs.databricks.com/projects.html) to clone th
 * Deploy and use model in production
 * Build model using NLP on product description (tensorflow)
 * Build model using DL on product description + images (tensorflow)
+
 
 
