@@ -1,6 +1,6 @@
 # Databricks notebook source
 # MAGIC %md-sandbox
-# MAGIC # Wind Turbine Predictive Maintenance
+# MAGIC # Wind Turbine Predictive Maintenance (WORK-IN-PROGRESS)
 # MAGIC 
 # MAGIC In this example, we demonstrate anomaly detection for the purposes of finding damaged wind turbines. A damaged, single, inactive wind turbine costs energy utility companies thousands of dollars per day in losses.
 # MAGIC 
@@ -14,10 +14,9 @@
 # MAGIC </div>
 # MAGIC Our dataset consists of vibration readings coming off sensors located in the gearboxes of wind turbines. 
 # MAGIC 
-# MAGIC We will use Gradient Boosted Tree Classification to predict which set of vibrations could be indicative of a failure.
+# MAGIC We will use **XGBOOST** a famous Gradient Boosted Tree Classification library to predict which set of vibrations could be indicative of a failure.
 # MAGIC 
 # MAGIC One the model is trained, we'll use MFLow to track its performance and save it in the registry to deploy it in production
-# MAGIC 
 # MAGIC 
 # MAGIC 
 # MAGIC *Data Source Acknowledgement: This Data Source Provided By NREL*

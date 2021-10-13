@@ -1,5 +1,5 @@
 # Databricks notebook source
-# MAGIC %md # Auto-loader schema inference & error handling demo
+# MAGIC %md # Auto-loader schema inference & error handling
 
 # COMMAND ----------
 
