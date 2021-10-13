@@ -8,7 +8,6 @@ Use [Databricks Projects](https://docs.databricks.com/projects.html) to clone th
 
 #### IOT & Wind turbine predictive maintenance:
 
-Work in progress
 
 * Data ingestion (python, SQL)
 * Redash visualization
@@ -17,23 +16,27 @@ Work in progress
 
 #### Retail & Sales forecast:
 
-Work in progress
-
 * Data ingestion with CDC using Delta (python, SQL)
+* Delta CDF to track changes over delta tables
 * Redash visualization
 * Build a sales forecast model (using scikit-learn)
 * Deploy and use model in production
 * Scale to thousands of model in parallel
 
+
+### Work in progress:
+
+#### Sessionalization (Adtech)
+
+#### Credit risk
+
 #### E-commerce & product classification:
-
-Work in progress
-
 * Data ingestion (python, SQL)
 * Redash visualization
 * Build a model to classify products (using scikit-learn)
 * Deploy and use model in production
 * Build model using NLP on product description (tensorflow)
 * Build model using DL on product description + images (tensorflow)
+
 
 

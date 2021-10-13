@@ -4,7 +4,7 @@
 # COMMAND ----------
 
 # DBTITLE 1,Let's prepare our data first
-# MAGIC %run ./resources/00.0-setup-autoloader $reset_all=$reset_all_data
+# MAGIC %run ./resources/00.0-setup-autoloader $reset_all_data=$reset_all_data
 
 # COMMAND ----------
 

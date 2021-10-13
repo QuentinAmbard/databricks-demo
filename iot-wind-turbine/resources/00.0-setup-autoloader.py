@@ -1,5 +1,9 @@
 # Databricks notebook source
-# MAGIC %run ./00-setup $reset_all=$reset_all
+#dbutils.widgets.dropdown("reset_all_data", "false", ["true", "false"])
+
+# COMMAND ----------
+
+# MAGIC %run ./00-setup $reset_all_data=$reset_all_data
 
 # COMMAND ----------
 
