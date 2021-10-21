@@ -31,6 +31,16 @@
 
 # COMMAND ----------
 
+# DBTITLE 1,Stream Kafka Topic directly
+# bronzeDF = spark.readStream \
+#                 .format("kafka") \
+#                 .option("kafka.bootstrap.servers", "kafkaserver1:9092,kafkaserver2:9092") \
+#                 .option("subscribe", "turbine") \
+#                 .load()
+
+# COMMAND ----------
+
+# DBTITLE 1,Stream landing files from cloud storage
 bronzeDF = spark.readStream \
                 .format("cloudFiles") \
                 .option("cloudFiles.format", "parquet") \
@@ -38,6 +48,7 @@ bronzeDF = spark.readStream \
                 .schema("value string, key double") \
                 .load("/mnt/quentin-demo-resources/turbine/incoming-data") 
                   
+# Write Stream as Delta Table
 bronzeDF.writeStream \
         .format("delta") \
         .option("ignoreChanges", "true") \
@@ -81,15 +92,6 @@ spark.readStream.table('turbine_bronze') \
 
 # COMMAND ----------
 
-# MAGIC %sql 
-# MAGIC create table if not exists turbine_status_gold (id int, status string) using delta;
-# MAGIC 
-# MAGIC COPY INTO turbine_status_gold
-# MAGIC   FROM '/mnt/quentin-demo-resources/turbine/status'
-# MAGIC   FILEFORMAT = PARQUET;
-
-# COMMAND ----------
-
 # DBTITLE 1,Join data with turbine status (Damaged or Healthy)
 turbine_stream = spark.readStream.table('turbine_silver')
 turbine_status = spark.read.table("turbine_status_gold")
@@ -104,11 +106,25 @@ turbine_stream.join(turbine_status, ['id'], 'left') \
 # COMMAND ----------
 
 # MAGIC %sql
-# MAGIC select * from turbine_gold;
+# MAGIC select TIMESTAMP, AN3, SPEED, status from turbine_gold;
 
 # COMMAND ----------
 
-# DBTITLE 1,Grant Access to Database
+# MAGIC %md
+# MAGIC ### Cancel all streams
+
+# COMMAND ----------
+
+for s in spark.streams.active:
+  s.stop()
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### Grant Access to Database
+
+# COMMAND ----------
+
 # MAGIC %sql
 # MAGIC 
 # MAGIC GRANT SELECT ON DATABASE turbine_demo TO `data.scientist@databricks.com`

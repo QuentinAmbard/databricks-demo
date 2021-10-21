@@ -18,24 +18,19 @@
 
 # COMMAND ----------
 
-# DBTITLE 1,Previously, autoloader wouldn't infer schema on parquet/json/... 
-spark.conf.set("spark.databricks.cloudFiles.schemaInference.enabled", "false") #false is default
+# DBTITLE 1,Autoloader can now infer the schema automatically (from any format) 
+spark.conf.set("spark.databricks.cloudFiles.schemaInference.enabled", "true")
 bronzeDF = spark.readStream \
                 .format("cloudFiles") \
                 .option("cloudFiles.format", "json") \
+                .option("cloudFiles.schemaLocation", f"{path}/auto_loader_inferred_schema") \
                 .load("/mnt/quentin-demo-resources/turbine/incoming-data-json") 
 display(bronzeDF)
 
 # COMMAND ----------
 
-# DBTITLE 1,Autoloader can now infer the schema automatically (from any format) 
-#Note: schema is infered from a sample of files, making inference faster
-spark.conf.set("spark.databricks.cloudFiles.schemaInference.enabled", "true")
-bronzeDF = spark.readStream \
-                .format("cloudFiles") \
-                .option("cloudFiles.format", "json") \
-                .load("/mnt/quentin-demo-resources/turbine/incoming-data-json") 
-display(bronzeDF)
+# MAGIC %md
+# MAGIC _Note: schema is infered from a sample of files, making inference faster_
 
 # COMMAND ----------
 
@@ -50,7 +45,9 @@ stream = (spark.readStream
                 #will fail and restart the stream when new columns appear 
                 .option("failOnUnknownFields", "true") 
                 # enforce schema on part of the field (ex: for date or specific FLOAT types)  
-                .option("cloudFiles.schemaHints", "TIMESTAMP TIMESTAMP, infos STRUCT<wind_speed:FLOAT, wind_direction:STRING>") 
+                .option("cloudFiles.schemaHints", "TIMESTAMP TIMESTAMP, infos STRUCT<wind_speed:FLOAT, wind_direction:STRING>")
+                # will save inferred schema in this location
+                .option("cloudFiles.schemaLocation", f"{path}/auto_loader_inferred_schema") \
                 # will collect columns where the data types can change across rows 
                 .option("unparsedDataColumn", "_incorrect_data")
                 .load(path+"/turbine/incoming-data-json"))
@@ -65,7 +62,7 @@ new_row.write.format("json").mode("append").save(path+"/turbine/incoming-data-js
 
 # COMMAND ----------
 
-# DBTITLE 1,Let's add an incorrect field ("infos.wind_speed" and "AN3" as string instead of float)
+# DBTITLE 1,Adding an incorrect field ("infos.wind_speed" and "AN3" as string instead of float)
 incorrect_data = spark.read.json(sc.parallelize(['{"AN3":"-1.4746","AN4":-1.8042,"AN5":-2.1093,"AN6":-5.1975,"AN7":-0.45691,"AN8":-7.0763,"AN9":-3.3133,"AN10":-0.0059799,"SPEED":4.8805,"ID":347.0,"TIMESTAMP":"2020-06-07T19:18:46.000Z", "infos": {"wind_speed": "fast_wind", "wind_direction": "south"}}']))
 incorrect_data.write.format("json").mode("append").save(path+"/turbine/incoming-data-json")
 
@@ -75,6 +72,7 @@ incorrect_data.write.format("json").mode("append").save(path+"/turbine/incoming-
 
 # COMMAND ----------
 
+# DBTITLE 1,Define helper functions
 def start_stream():
   return (spark.readStream 
               .format("cloudFiles") 
@@ -82,7 +80,9 @@ def start_stream():
               #will fail and restart the stream when new columns appear 
               .option("failOnUnknownFields", "true") 
               # enforce schema on part of the field (ex: for date or specific FLOAT types)  
-              .option("cloudFiles.schemaHints", "TIMESTAMP TIMESTAMP, infos STRUCT<wind_speed:FLOAT, wind_direction:STRING>") 
+              .option("cloudFiles.schemaHints", "TIMESTAMP TIMESTAMP, infos STRUCT<wind_speed:FLOAT, wind_direction:STRING>")
+              # will save inferred schema in this location
+              .option("cloudFiles.schemaLocation", f"{path}/auto_loader_inferred_schema") \
               # will collect columns where the data types can change across rows 
               .option("unparsedDataColumn", "_incorrect_data")
               .load(path+"/turbine/incoming-data-json"))
@@ -100,9 +100,26 @@ def start_stream_restart_on_schema_evolution():
     except BaseException as e:
       if not ('UnknownFieldException' in str(e.stackTrace)):
         raise e
-        
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC #### Start Stream
+
+# COMMAND ----------
+
 start_stream_restart_on_schema_evolution()
 
 # COMMAND ----------
 
 # MAGIC %sql select * from turbine_schema_evolution
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### Cancel all active streams
+
+# COMMAND ----------
+
+for s in spark.streams.active:
+  s.stop()

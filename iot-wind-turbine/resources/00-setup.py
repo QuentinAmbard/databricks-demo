@@ -1,8 +1,9 @@
 # Databricks notebook source
-# MAGIC %fs ls /datasets
+dbutils.widgets.dropdown("reset_all_data", "false", ["true", "false"], "Reset all data")
 
 # COMMAND ----------
 
+# DBTITLE 1,Package imports
 from pyspark.sql.functions import rand, input_file_name, from_json, col
 from pyspark.sql.types import *
  
@@ -24,9 +25,21 @@ import matplotlib.pyplot as plt
 from time import sleep
 import re
 
+# COMMAND ----------
+
+# DBTITLE 1,Mount S3 bucket containing sensor data
+aws_bucket_name = "quentin-demo-resources"
+mount_name = "quentin-demo-resources"
+
+try:
+  dbutils.fs.ls("/mnt/%s" % mount_name)
+except:
+  print("bucket isn't mounted, mounting the demo bucket under %s" % mount_name)
+  dbutils.fs.mount("s3a://%s" % aws_bucket_name, "/mnt/%s" % mount_name)
 
 # COMMAND ----------
 
+# DBTITLE 1,Create User-Specific database
 current_user = dbutils.notebook.entry_point.getDbutils().notebook().getContext().tags().apply('user')
 dbName = re.sub(r'\W+', '_', current_user)
 path = "/Users/{}/demo".format(current_user)
@@ -35,18 +48,19 @@ dbutils.widgets.text("dbName", dbName, "dbName")
 print("using path {}".format(path))
 spark.sql("""create database if not exists {} LOCATION '{}/turbine/tables' """.format(dbName, path))
 spark.sql("""USE {}""".format(dbName))
-
+print("using database {}".format(dbName))
 
 # COMMAND ----------
 
+# DBTITLE 1,Reset tables in user's database
 tables = ["turbine_bronze", "turbine_silver", "turbine_gold", "turbine_power", "turbine_schema_evolution"]
-reset_all = dbutils.widgets.get("reset_all") == "true" or any([not spark.catalog._jcatalog.tableExists(table) for table in ["turbine_power"]])
+reset_all = dbutils.widgets.get("reset_all_data") == "true" or any([not spark.catalog._jcatalog.tableExists(table) for table in ["turbine_power"]])
 if reset_all:
   print("resetting data")
   for table in tables:
     spark.sql("""drop table if exists {}.{}""".format(dbName, table))
     
-  #spark.sql("""drop database if exists {} CASCADE""".format(dbName))
+#   spark.sql("""drop database if exists {} CASCADE""".format(dbName))
   spark.sql("""create database if not exists {} LOCATION '{}/tables' """.format(dbName, path))
   dbutils.fs.rm(path+"/turbine/bronze/", True)
   dbutils.fs.rm(path+"/turbine/silver/", True)
@@ -59,6 +73,15 @@ if reset_all:
        .write.format("delta").mode("overwrite").save(path+"/turbine/power/bronze/data")
   
   spark.sql("create table if not exists turbine_power using delta location '"+path+"/turbine/power/bronze/data'")
+  
+  # Create Gold Table containing "Labels"
+  spark.sql("create table if not exists turbine_status_gold (id int, status string) using delta")
+  spark.sql("""
+  COPY INTO turbine_status_gold
+    FROM '/mnt/quentin-demo-resources/turbine/status'
+    FILEFORMAT = PARQUET;
+  """)
+  
 else:
   print("loaded without data reset")
 
@@ -68,3 +91,27 @@ spark.conf.set("spark.sql.streaming.checkpointLocation", path+"/turbine/_checkpo
 
 #Allow schema inference for auto loader
 spark.conf.set("spark.databricks.cloudFiles.schemaInference.enabled", "true")
+
+# COMMAND ----------
+
+# DBTITLE 1,Create "gold" tables for autoML(remove ID/Timestamp columns) and ML purposes
+if reset_all:
+  dataset = spark.read.load("/mnt/quentin-demo-resources/turbine/gold-data-for-ml")
+  selected_features = ["AN3", "AN4", "AN5", "AN6", "AN7", "AN8", "AN9", "AN10", "Speed", "Torque", "status"]
+  
+  # IN CASE YOU'D LIKE TO JUMP DIRECTLY TO AutoML AFTER INGESTION/DATA-ENGINEERING DEMO
+  df = dataset.select(*selected_features)
+  df.write \
+    .format("delta") \
+    .save(f"{path}/turbine/gold/automl_data")
+  
+  spark.sql("DROP TABLE IF EXISTS turbine_gold_for_automl")
+  spark.sql(f"""CREATE TABLE turbine_gold_for_automl
+  LOCATION '{path}/turbine/gold/automl_data'
+  """)
+  
+  # Create "Gold" table for ML purpose and demo
+  spark.sql("DROP TABLE IF EXISTS turbine_gold_for_ml")
+  spark.sql(f"""CREATE TABLE turbine_gold_for_ml
+  LOCATION '/mnt/quentin-demo-resources/turbine/gold-data-for-ml'
+  """)
