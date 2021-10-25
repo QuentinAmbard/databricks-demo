@@ -107,7 +107,7 @@ df_dataset.isna().sum().plot(kind='bar')
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Create feature tables for Feature Store
+# MAGIC # Create feature tables for Feature Store
 # MAGIC Use the client to create the feature tables defining meta-data such as the `database.table` which will be written to and the `key`
 
 # COMMAND ----------
@@ -128,7 +128,6 @@ def compute_sensor_features(data):
 # COMMAND ----------
 
 sensor_featuresDF = compute_sensor_features(dataset_cleanDF)
-# sensor_featuresDF.printSchema()
 
 # COMMAND ----------
 
@@ -139,6 +138,7 @@ sensor_featuresDF = compute_sensor_features(dataset_cleanDF)
 # COMMAND ----------
 
 from pyspark.sql.functions import month, dayofweek, hour, sin, cos
+import numpy as np
 
 @feature_table
 def compute_time_cyclical_features(data):
@@ -159,7 +159,7 @@ display(season_featuresDF)
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### Create output/feature
+# MAGIC ## Create output/feature
 # MAGIC Binarize output
 
 # COMMAND ----------
@@ -182,7 +182,7 @@ outputDF = compute_damage_feature(dataset_cleanDF)
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### Setup Offline database for feature store and create feature table handles
+# MAGIC ## Setup Offline database for feature store and create feature table handles
 # MAGIC This is usually set-up once
 
 # COMMAND ----------
@@ -242,7 +242,7 @@ output_feature_table = fs.create_feature_table(
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### Compute and write features to offline store
+# MAGIC ## Compute and write features to offline store
 # MAGIC Use built-in `compute_and_write` method from `@feature_store` decorator which appends/updates data in the feature store table
 
 # COMMAND ----------
@@ -255,8 +255,27 @@ compute_damage_feature.compute_and_write(dataset_cleanDF, feature_table_name=out
 
 # COMMAND ----------
 
+# MAGIC %md
+# MAGIC If tables are already computed then use `write_table` method (which also works for a streaming DataFrame)
+
+# COMMAND ----------
+
+# fs.write_table(
+#   name = sensor_features_table_name,
+#   df = sensor_featuresDF,
+#   mode = 'overwrite' # 'merge'
+# )
+
+# fs.write_table(
+#   name = season_features_table_name,
+#   df = season_featuresDF,
+#   mode = 'overwrite' # 'merge'
+# )
+
+# COMMAND ----------
+
 # MAGIC %md 
-# MAGIC ## Building Model from a Feature Store: using Gradient Boosted Classifier and mlflow
+# MAGIC # Building Model from a Feature Store: using Gradient Boosted Classifier and mlflow
 # MAGIC In a feature store, we want to define the joins declaratively, because the same join will need to happen in batch inference or online serving.
 
 # COMMAND ----------
@@ -270,6 +289,7 @@ def generate_lookups_per_table(table, key="TIMESTAMP"):
 # COMMAND ----------
 
 # DBTITLE 1,Get handle for feature tables
+# from databricks.feature_store import FeatureStoreClient
 # fs = FeatureStoreClient()
 sensor_features_table = fs.get_feature_table(sensor_features_table_name)
 season_features_table = fs.get_feature_table(season_features_table_name)
@@ -304,8 +324,12 @@ def fit_model(model_feature_lookups, n_iter=10):
 
   with mlflow.start_run():
     trainingIDs_w_label_df = spark.read.table(f"{fs_dbName}.OUTPUT_FEATURES")
-    training_set = fs.create_training_set(trainingIDs_w_label_df, model_feature_lookups, label=label, exclude_columns=key)
+    training_set = fs.create_training_set(trainingIDs_w_label_df,
+                                          model_feature_lookups,
+                                          label=label,
+                                          exclude_columns=key)
 
+    # Convert to pandas Dataframe
     training_pd = training_set.load_df().toPandas()
     X = training_pd.drop(label, axis=1)
     y = training_pd[label]
@@ -319,7 +343,7 @@ def fit_model(model_feature_lookups, n_iter=10):
     # Not attempting to tune the model at all for purposes here
     gb_classifier = GradientBoostingClassifier(n_iter_no_change=n_iter)
     
-    # Encode categorical cols
+    # Encode categorical cols (if any)
 #     encoders = ColumnTransformer(transformers=[('encoder', OneHotEncoder(handle_unknown='ignore'), X.columns[X.dtypes == 'object'])])
     
     pipeline = Pipeline([("gb_classifier", gb_classifier)])
@@ -339,13 +363,17 @@ def fit_model(model_feature_lookups, n_iter=10):
 
 # COMMAND ----------
 
-# DBTITLE 1,Train an initial model (without seasonality features)
+# MAGIC %md
+# MAGIC ### Train an initial model (without seasonality features)
+
+# COMMAND ----------
+
 fit_model(generate_lookups_per_table(sensor_features_table))
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Train using other seasonality features
+# MAGIC ### Train using seasonality features
 
 # COMMAND ----------
 
@@ -354,8 +382,10 @@ fit_model(generate_lookups_per_table(sensor_features_table) + generate_lookups_p
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Run batch inference
+# MAGIC # Run batch inference
 # MAGIC Usinfg FS's `score_batch` method
+# MAGIC 
+# MAGIC __ASSUMPTION IS THAT FEATURES ARE PRE-COMPUTED__
 
 # COMMAND ----------
 
@@ -370,10 +400,58 @@ display(with_predictions)
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Publishing Feature Store Tables to ONLINE store
+# MAGIC # Updating Feature Store Tables
+# MAGIC After an initial look at feature importances, we may need to engineer more features
+
+# COMMAND ----------
+
+@feature_table
+def compute_time_cyclical_features(data):
+  """
+  Extract month/hour and apply cyclical calculation and if day is a week-end
+  """
+  return data.select("TIMESTAMP") \
+              .withColumn("Cos_Month", cos(2*np.pi*month("TIMESTAMP")/12)) \
+              .withColumn("Sin_Month", sin(2*np.pi*month("TIMESTAMP")/12)) \
+              .withColumn("Cos_Hour", cos(2*np.pi*hour("TIMESTAMP")/23)) \
+              .withColumn("Sin_Hour", sin(2*np.pi*hour("TIMESTAMP")/23)) \
+              .withColumn("is_weekend", dayofweek("TIMESTAMP").isin([1,7]).cast("int"))
+
+# COMMAND ----------
+
+display(compute_time_cyclical_features(dataset_cleanDF))
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC Now, with the new definitions of features in hand, `compute_and_write` can add the new features by `merge`-ing them into the feature store table.
+
+# COMMAND ----------
+
+compute_time_cyclical_features.compute_and_write(dataset_cleanDF,
+                                                 feature_table_name=season_features_table_name,
+                                                 mode="merge")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC # Reading feature data from a specific timestamp
+# MAGIC using 'as_of' time joins
+
+# COMMAND ----------
+
+season_features_df_ = fs.read_table(
+  name=season_features_table_name,
+  as_of_delta_timestamp="2021-10-22"
+)
+
+season_features_df_.printSchema()
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC # Publishing Feature Store Tables to ONLINE store
 # MAGIC Publish the data in these tables to an external store (e.g. Amazon RDS MySQL, Amazon Aurora) that is more suitable for fast online lookups
-# MAGIC 
-# MAGIC _TO-DO_
 
 # COMMAND ----------
 
@@ -388,5 +466,19 @@ password = dbutils.secrets.get("iot-turbine", "mysql-password")
 
 online_store = AmazonRdsMySqlSpec(hostname, port, user, password)
 
-fs.publish_table(name=sensor_features_table_name, online_store=online_store)
-fs.publish_table(name=season_features_table_name, online_store=online_store)
+fs.publish_table(name=sensor_features_table_name,
+                 online_store=online_store,
+                 streaming=False
+                )
+
+fs.publish_table(name=season_features_table_name,
+                 online_store=online_store,
+                 streaming=False
+                )
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC # More info
+# MAGIC * [Supported Types](http://docs.databricks.com.s3-website-us-west-1.amazonaws.com/applications/machine-learning/feature-store/feature-tables.html#supported-data-types)
+# MAGIC * [Limitations](http://docs.databricks.com.s3-website-us-west-1.amazonaws.com/applications/machine-learning/feature-store/troubleshooting-and-limitations.html#limitations)
