@@ -1,101 +1,13 @@
 # Databricks notebook source
-# MAGIC %md-sandbox
-# MAGIC # Wind Turbine Predictive Maintenance
-# MAGIC 
-# MAGIC In this example, we demonstrate anomaly detection for the purposes of finding damaged wind turbines. A damaged, single, inactive wind turbine costs energy utility companies thousands of dollars per day in losses.
-# MAGIC 
-# MAGIC 
-# MAGIC <img src="https://quentin-demo-resources.s3.eu-west-3.amazonaws.com/images/turbine/turbine_flow.png" />
-# MAGIC 
-# MAGIC 
-# MAGIC <div style="float:right; margin: -10px 50px 0px 50px">
-# MAGIC   <img src="https://s3.us-east-2.amazonaws.com/databricks-knowledge-repo-images/ML/wind_turbine/wind_small.png" width="400px" /><br/>
-# MAGIC   *locations of the sensors*
-# MAGIC </div>
-# MAGIC Our dataset consists of vibration readings coming off sensors located in the gearboxes of wind turbines. 
-# MAGIC 
-# MAGIC We will use Gradient Boosted Tree Classification to predict which set of vibrations could be indicative of a failure.
-# MAGIC 
-# MAGIC One the model is trained, we'll use MFLow to track its performance and save it in the registry to deploy it in production
-# MAGIC 
-# MAGIC 
-# MAGIC 
-# MAGIC *Data Source Acknowledgement: This Data Source Provided By NREL*
-# MAGIC 
-# MAGIC *https://www.nrel.gov/docs/fy12osti/54530.pdf*
-
-# COMMAND ----------
-
-# MAGIC %md ### 
-
-# COMMAND ----------
-
-# MAGIC %pip install shap
-
-# COMMAND ----------
-
 # MAGIC %md 
-# MAGIC ## Model Creation: Workflows with Pyspark.ML Pipeline
+# MAGIC # Model Explanability
+# MAGIC 
+# MAGIC Let's explain our model and the importance of each features for our predictions
 
 # COMMAND ----------
 
-# DBTITLE 1,Build Training and Test dataset
-from pyspark.ml.feature import StringIndexer, StandardScaler, VectorAssembler
-from pyspark.ml import Pipeline 
-dataset = spark.read.table("quentin.turbine_gold").orderBy(rand())
-train, test = dataset.limit(1000000).randomSplit([0.8, 0.2])
-
-# COMMAND ----------
-
-# DBTITLE 1,Train our model using a GBT
-from pyspark.ml.classification import GBTClassifier
-from pyspark.ml.evaluation import BinaryClassificationEvaluator
-from pyspark.ml.tuning import ParamGridBuilder, CrossValidator
-from pyspark.mllib.evaluation import MulticlassMetrics
-from mlflow.utils.file_utils import TempDir
-import mlflow.spark
-import mlflow
-import seaborn as sn
-import pandas as pd
-import matplotlib.pyplot as plt
-
-
-with mlflow.start_run():
-  #the source table will automatically be logged to mlflow
-  #mlflow.spark.autolog()
-  
-  gbt = GBTClassifier(labelCol="label", featuresCol="features").setMaxIter(5)
-  grid = ParamGridBuilder().addGrid(gbt.maxDepth, [3,4,5]).build()
-
-  ev = BinaryClassificationEvaluator()
-  cv = CrossValidator(estimator=gbt, estimatorParamMaps=grid, evaluator=ev, numFolds=2)
-
-  featureCols = ["AN3", "AN4", "AN5", "AN6", "AN7", "AN8", "AN9", "AN10"]
-  stages = [VectorAssembler(inputCols=featureCols, outputCol="va"), StandardScaler(inputCol="va", outputCol="features"), StringIndexer(inputCol="STATUS", outputCol="label"), cv]
-  pipeline = Pipeline(stages=stages)
-
-  pipelineTrained = pipeline.fit(train)
-  
-  mlflow.spark.log_model(pipelineTrained, "turbine_gbt")
-  mlflow.set_tag("model", "turbine_gbt")
-  predictions = pipelineTrained.transform(test)
-
-  metrics = MulticlassMetrics(predictions.select(['prediction', 'label']).rdd)
-  mlflow.log_metric("precision", metrics.precision(1.0))
-  mlflow.log_metric("recall", metrics.recall(1.0))
-  mlflow.log_metric("f1", metrics.fMeasure(1.0))
-  AUROC = ev.evaluate(predictions)
-  mlflow.log_metric("AUROC", AUROC)
-  
-  #Add confusion matrix to the model:
-  with TempDir() as tmp_dir:
-    labels = pipelineTrained.stages[2].labels
-    sn.heatmap(pd.DataFrame(metrics.confusionMatrix().toArray()), annot=True, fmt='g', xticklabels=labels, yticklabels=labels)
-    plt.suptitle("Turbine Damage Prediction. F1={:.2f}".format(metrics.fMeasure(1.0)), fontsize = 18)
-    plt.xlabel("Predicted Labels")
-    plt.ylabel("True Labels")
-    plt.savefig(tmp_dir.path()+"/confusion_matrix.png")
-    mlflow.log_artifact(tmp_dir.path()+"/confusion_matrix.png")
+# DBTITLE 1,First, we need to install shap in our notebook
+# MAGIC %pip install shap
 
 # COMMAND ----------
 
@@ -105,7 +17,16 @@ with mlflow.start_run():
 
 # COMMAND ----------
 
-bestModel = pipelineTrained.stages[-1:][0].bestModel
+# MAGIC %run ./resources/00-setup $reset_all_data=false
+
+# COMMAND ----------
+
+model_from_registry = mlflow.spark.load_model('models:/turbine_gbt/production')
+
+# COMMAND ----------
+
+featureCols = ["AN3", "AN4", "AN5", "AN6", "AN7", "AN8", "AN9", "AN10"]
+bestModel = model_from_registry.stages[-1:][0].bestModel
 # convert numpy.float64 to str for spark.createDataFrame()
 weights = map(lambda w: '%.10f' % w, bestModel.featureImportances)
 weightedFeatures = spark.createDataFrame(sorted(zip(weights, featureCols), key=lambda x: x[1], reverse=True)).toDF("weight", "feature")
@@ -126,6 +47,7 @@ with open(shap.__file__[:shap.__file__.rfind('/')]+"/plots/resources/bundle.js",
 #Build our explainer    
 explainer = shap.TreeExplainer(bestModel)
 
+dataset = spark.read.load("/mnt/quentin-demo-resources/turbine/gold-data-for-ml")
 #Let's draw the shap value (~force) of each feature
 X = dataset.select(featureCols).limit(1000).toPandas()
 shap_values = explainer.shap_values(X, check_additivity=False)
@@ -156,7 +78,7 @@ displayHTML(shap_bundle_js + plot_html.html())
 X = dataset.select(featureCols).limit(1000).toPandas()
 shap_values = explainer.shap_values(X, check_additivity=False)
 plot_html = shap.force_plot(explainer.expected_value, shap_values, X)
-displayHTML(shap_bundle_js + plot_html.data)
+displayHTML(shap_bundle_js + plot_html.html())
 
 # COMMAND ----------
 

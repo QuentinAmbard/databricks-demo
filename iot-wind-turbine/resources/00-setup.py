@@ -40,13 +40,14 @@ except:
 # COMMAND ----------
 
 # DBTITLE 1,Create User-Specific database
+
 current_user = dbutils.notebook.entry_point.getDbutils().notebook().getContext().tags().apply('user')
 dbName = re.sub(r'\W+', '_', current_user)
 path = "/Users/{}/demo".format(current_user)
 dbutils.widgets.text("path", path, "path")
 dbutils.widgets.text("dbName", dbName, "dbName")
 print("using path {}".format(path))
-spark.sql("""create database if not exists {} LOCATION '{}/turbine/tables' """.format(dbName, path))
+spark.sql("""create database if not exists {} LOCATION '{}/global_demo/tables' """.format(dbName, path))
 spark.sql("""USE {}""".format(dbName))
 print("using database {}".format(dbName))
 
