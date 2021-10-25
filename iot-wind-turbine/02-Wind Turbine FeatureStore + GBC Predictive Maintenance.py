@@ -371,7 +371,7 @@ display(with_predictions)
 
 # MAGIC %md
 # MAGIC ## Publishing Feature Store Tables to ONLINE store
-# MAGIC Publish the data in these tables to an external store (e.g. AmazonRDS) that is more suitable for fast online lookups
+# MAGIC Publish the data in these tables to an external store (e.g. Amazon RDS MySQL, Amazon Aurora) that is more suitable for fast online lookups
 # MAGIC 
 # MAGIC _TO-DO_
 
