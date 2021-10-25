@@ -1,5 +1,5 @@
 # Databricks notebook source
-#dbutils.widgets.dropdown("reset_all_data", "false", ["true", "false"])
+dbutils.widgets.dropdown("reset_all_data", "false", ["true", "false"])
 
 # COMMAND ----------
 
