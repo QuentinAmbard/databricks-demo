@@ -5,7 +5,7 @@
 # MAGIC In this example, we demonstrate anomaly detection for the purposes of finding damaged wind turbines. A damaged, single, inactive wind turbine costs energy utility companies thousands of dollars per day in losses.
 # MAGIC 
 # MAGIC 
-# MAGIC <img src="https://github.com/QuentinAmbard/databricks-demo/raw/main/iot-wind-turbine/resources/images/turbine-demo-flow.png" width="90%"/>
+# MAGIC <img src="https://github.com/aelhelouDB/databricks-demo/raw/main/iot-wind-turbine/resources/images/turbine-demo-flow-ds.png" width="90%" />
 # MAGIC 
 # MAGIC 
 # MAGIC <div style="float:right; margin: -10px 50px 0px 50px">
@@ -135,7 +135,4 @@ display(predictions)
 # MAGIC 
 # MAGIC %md 
 # MAGIC ### We can now explore our prediction in a new dashboard
-# MAGIC 
-# MAGIC ![turbine-demo-dashboard](https://github.com/QuentinAmbard/databricks-demo/raw/main/iot-wind-turbine/resources/images/turbine-demo-dashboard2.png)
-# MAGIC 
 # MAGIC [Open SQL Analytics dashboard](https://e2-demo-west.cloud.databricks.com/sql/dashboards/92d8ccfa-10bb-411c-b410-274b64b25520-turbine-demo-predictions?o=2556758628403379)
