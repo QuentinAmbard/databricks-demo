@@ -1,4 +1,8 @@
 # Databricks notebook source
+dbutils.widgets.dropdown("reset_all_data", "false", ["true", "false"], "Reset all data")
+
+# COMMAND ----------
+
 # MAGIC %md-sandbox
 # MAGIC # Wind Turbine Predictive Maintenance: model training
 # MAGIC 
@@ -26,7 +30,7 @@
 
 # COMMAND ----------
 
-# MAGIC %run ./resources/00-setup $reset_all_data=$reset_all_data
+# MAGIC %run ../resources/00-setup $reset_all_data=$reset_all_data
 
 # COMMAND ----------
 
@@ -45,7 +49,7 @@
 
 # COMMAND ----------
 
-dataset = spark.read.load("/mnt/quentin-demo-resources/turbine/gold-data-for-ml")
+dataset = spark.read.table("turbine_gold_for_ml")
 display(dataset)
 
 # COMMAND ----------
@@ -82,7 +86,7 @@ with mlflow.start_run():
   mlflow.log_metric("recall", metrics.recall(1.0))
   mlflow.log_metric("f1", metrics.fMeasure(1.0))
   
-  mlflow.spark.log_model(pipelineTrained, "turbine_gbt", input_example={"AN3":-1.4746, "AN4":-1.8042, "AN5":-2.1093, "AN6":-5.1975, "AN7":-0.45691, "AN8":-7.0763, "AN9":-3.3133, "AN10":-0.0059799})
+  mlflow.spark.log_model(pipelineTrained, f"turbine_gbt_{dbName}", input_example={"AN3":-1.4746, "AN4":-1.8042, "AN5":-2.1093, "AN6":-5.1975, "AN7":-0.45691, "AN8":-7.0763, "AN9":-3.3133, "AN10":-0.0059799})
   mlflow.set_tag("model", "turbine_gbt") 
   
   #Add confusion matrix to the model:
@@ -93,7 +97,6 @@ with mlflow.start_run():
   plt.xlabel("Predicted Labels")
   plt.ylabel("True Labels")
   mlflow.log_figure(fig, "confusion_matrix.png") #Requires MLFlow 1.13 (%pip install mlflow==1.13.1)
-  
 
 # COMMAND ----------
 
@@ -111,7 +114,7 @@ model_registered = mlflow.register_model("runs:/" + best_models.iloc[0].run_id +
 # DBTITLE 1,Flag this version as production ready
 client = mlflow.tracking.MlflowClient()
 print("registering model version "+model_registered.version+" as production model")
-client.transition_model_version_stage(name = "turbine_gbt", version = model_registered.version, stage = "Production", archive_existing_versions=True)
+client.transition_model_version_stage(name = f"turbine_gbt_{dbName}", version = model_registered.version, stage = "Production", archive_existing_versions=True)
 
 # COMMAND ----------
 
@@ -121,7 +124,7 @@ client.transition_model_version_stage(name = "turbine_gbt", version = model_regi
 # COMMAND ----------
 
 # DBTITLE 1,Load the model from our registry
-model_from_registry = mlflow.spark.load_model('models:/turbine_gbt/production')
+model_from_registry = mlflow.spark.load_model(f"models:/turbine_gbt_{dbName}/production")
 
 # COMMAND ----------
 

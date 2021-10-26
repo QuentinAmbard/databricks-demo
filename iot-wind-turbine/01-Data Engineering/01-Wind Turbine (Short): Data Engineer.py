@@ -1,4 +1,8 @@
 # Databricks notebook source
+dbutils.widgets.dropdown("reset_all_data", "false", ["true", "false"], "Reset all data")
+
+# COMMAND ----------
+
 # MAGIC %md-sandbox
 # MAGIC # Wind Turbine Predictive Maintenance
 # MAGIC 
@@ -22,7 +26,7 @@
 
 # COMMAND ----------
 
-# MAGIC %run ./resources/00-setup $reset_all_data=$reset_all_data
+# MAGIC %run ../resources/00-setup $reset_all_data=$reset_all_data
 
 # COMMAND ----------
 
@@ -122,6 +126,7 @@ for s in spark.streams.active:
 
 # MAGIC %md
 # MAGIC ### Grant Access to Database
+# MAGIC If on a Table-ACLs enabled High-Concurrency Cluster
 
 # COMMAND ----------
 

@@ -1,10 +1,14 @@
 # Databricks notebook source
+dbutils.widgets.dropdown("reset_all_data", "false", ["true", "false"], "Reset all data")
+
+# COMMAND ----------
+
 # MAGIC %md # Auto-loader schema inference & error handling
 
 # COMMAND ----------
 
 # DBTITLE 1,Let's prepare our data first
-# MAGIC %run ./resources/00.0-setup-autoloader $reset_all_data=$reset_all_data
+# MAGIC %run ../resources/00.0-setup-autoloader $reset_all_data=$reset_all_data
 
 # COMMAND ----------
 
@@ -42,7 +46,7 @@ display(bronzeDF)
 stream = (spark.readStream 
                 .format("cloudFiles") 
                 .option("cloudFiles.format", "json") 
-                #will fail and restart the stream when new columns appear 
+                # will fail and restart the stream when new columns appear 
                 .option("failOnUnknownFields", "true") 
                 # enforce schema on part of the field (ex: for date or specific FLOAT types)  
                 .option("cloudFiles.schemaHints", "TIMESTAMP TIMESTAMP, infos STRUCT<wind_speed:FLOAT, wind_direction:STRING>")
@@ -112,6 +116,11 @@ start_stream_restart_on_schema_evolution()
 
 # COMMAND ----------
 
+# MAGIC %md
+# MAGIC _Cancel stream and run query ad-hoc after a couple of minutes_
+
+# COMMAND ----------
+
 # MAGIC %sql select * from turbine_schema_evolution
 
 # COMMAND ----------
@@ -123,4 +132,3 @@ start_stream_restart_on_schema_evolution()
 
 for s in spark.streams.active:
   s.stop()
-=======

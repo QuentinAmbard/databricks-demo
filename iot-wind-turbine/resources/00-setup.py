@@ -40,16 +40,17 @@ except:
 # COMMAND ----------
 
 # DBTITLE 1,Create User-Specific database
-
 current_user = dbutils.notebook.entry_point.getDbutils().notebook().getContext().tags().apply('user')
+print("Created variables:")
+print("current_user: {}".format(current_user))
 dbName = re.sub(r'\W+', '_', current_user)
 path = "/Users/{}/demo".format(current_user)
 dbutils.widgets.text("path", path, "path")
 dbutils.widgets.text("dbName", dbName, "dbName")
-print("using path {}".format(path))
+print("path (default path): {}".format(path))
 spark.sql("""create database if not exists {} LOCATION '{}/global_demo/tables' """.format(dbName, path))
 spark.sql("""USE {}""".format(dbName))
-print("using database {}".format(dbName))
+print("dbName (using database): {}".format(dbName))
 
 # COMMAND ----------
 
@@ -98,10 +99,10 @@ spark.conf.set("spark.databricks.cloudFiles.schemaInference.enabled", "true")
 # DBTITLE 1,Create "gold" tables for autoML(remove ID/Timestamp columns) and ML purposes
 if reset_all:
   dataset = spark.read.load("/mnt/quentin-demo-resources/turbine/gold-data-for-ml")
-  selected_features = ["AN3", "AN4", "AN5", "AN6", "AN7", "AN8", "AN9", "AN10", "Speed", "Torque", "status"]
+  selected_features = ["AN3", "AN4", "AN5", "AN6", "AN7", "AN8", "AN9", "AN10", "Speed", "status"]
   
   # IN CASE YOU'D LIKE TO JUMP DIRECTLY TO AutoML AFTER INGESTION/DATA-ENGINEERING DEMO
-  df = dataset.select(*selected_features)
+  df = dataset.select(*selected_features).dropna()
   df.write \
     .format("delta") \
     .save(f"{path}/turbine/gold/automl_data")
