@@ -1,4 +1,8 @@
 # Databricks notebook source
+dbutils.widgets.dropdown("reset_all_data", "false", ["true", "false"], "Reset all data")
+
+# COMMAND ----------
+
 # MAGIC %md-sandbox
 # MAGIC # Wind Turbine Predictive Maintenance
 # MAGIC 
@@ -27,7 +31,7 @@
 # COMMAND ----------
 
 # DBTITLE 1,Let's prepare our data first
-# MAGIC %run ./resources/00-setup $reset_all_data=$reset_all_data
+# MAGIC %run ../resources/00-setup $reset_all_data=$reset_all_data
 
 # COMMAND ----------
 
@@ -50,6 +54,7 @@
 
 # COMMAND ----------
 
+# DBTITLE 1,Use ONLY if Kafka stream has been setup on AWS/Kinesis
 #Option 1, read from kinesis directly
 #Load stream from Kafka
 bronzeDF = spark.readStream \
@@ -67,6 +72,7 @@ bronzeDF.selectExpr("CAST(key AS STRING) as key", "CAST(value AS STRING) as valu
 
 # COMMAND ----------
 
+# DBTITLE 1,Use this one by default
 #Option 2, read from files instead
 bronzeDF = spark.readStream \
                 .format("cloudFiles") \

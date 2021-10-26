@@ -4,7 +4,7 @@ dbutils.widgets.dropdown("reset_all_data", "false", ["true", "false"], "Reset al
 # COMMAND ----------
 
 # MAGIC %md-sandbox
-# MAGIC # Wind Turbine Predictive Maintenance
+# MAGIC # Wind Turbine Predictive Maintenance (using xgboost and hyperopt libraries)
 # MAGIC 
 # MAGIC In this example, we demonstrate anomaly detection for the purposes of finding damaged wind turbines. A damaged, single, inactive wind turbine costs energy utility companies thousands of dollars per day in losses.
 # MAGIC 
@@ -29,7 +29,7 @@ dbutils.widgets.dropdown("reset_all_data", "false", ["true", "false"], "Reset al
 
 # COMMAND ----------
 
-# MAGIC %run ./resources/00-setup $reset_all=$reset_all_data
+# MAGIC %run ../resources/00-setup $reset_all=$reset_all_data
 
 # COMMAND ----------
 
@@ -132,7 +132,7 @@ from hyperopt.pyll import scope
 from sklearn.metrics import roc_auc_score, f1_score, confusion_matrix
 from mlflow.models.signature import infer_signature
 
-model_name = "turbine_failure_model_xgboost" # Define model name
+model_name = f"turbine_failure_model_xgboost_{dbName}"
 
 def f1_eval(y_pred, d_test):
   # Custom F1 wrapper for XGBOOST

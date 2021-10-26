@@ -17,11 +17,11 @@
 
 # COMMAND ----------
 
-# MAGIC %run ./resources/00-setup $reset_all_data=false
+# MAGIC %run ../resources/00-setup $reset_all_data=false
 
 # COMMAND ----------
 
-model_from_registry = mlflow.spark.load_model('models:/turbine_gbt/production')
+model_from_registry = mlflow.spark.load_model(f"models:/turbine_gbt_{dbName}/production")
 
 # COMMAND ----------
 

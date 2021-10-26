@@ -4,7 +4,7 @@ dbutils.widgets.dropdown("reset_all_data", "false", ["true", "false"], "Reset al
 # COMMAND ----------
 
 # MAGIC %md-sandbox
-# MAGIC # Wind Turbine Predictive Maintenance
+# MAGIC # Wind Turbine Predictive Maintenance (using Feature Store)
 # MAGIC 
 # MAGIC In this example, we demonstrate anomaly detection for the purposes of finding damaged wind turbines. A damaged, single, inactive wind turbine costs energy utility companies thousands of dollars per day in losses.
 # MAGIC 
@@ -29,7 +29,7 @@ dbutils.widgets.dropdown("reset_all_data", "false", ["true", "false"], "Reset al
 
 # COMMAND ----------
 
-# MAGIC %run ./resources/00-setup $reset_all=$reset_all_data
+# MAGIC %run ../resources/00-setup $reset_all=$reset_all_data
 
 # COMMAND ----------
 
@@ -256,7 +256,7 @@ compute_damage_feature.compute_and_write(dataset_cleanDF, feature_table_name=out
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC If tables are already computed then use `write_table` method (which also works for a streaming DataFrame)
+# MAGIC If tables/sparkDataFrames are __already computed__ or a __streaming DataFrame__ then use `write_table` method:
 
 # COMMAND ----------
 
@@ -271,6 +271,17 @@ compute_damage_feature.compute_and_write(dataset_cleanDF, feature_table_name=out
 #   df = season_featuresDF,
 #   mode = 'overwrite' # 'merge'
 # )
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC *Query Feature Table (since it's a Delta Table)*
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC USE turbine_features_${db};
+# MAGIC SELECT * FROM sensor_features
 
 # COMMAND ----------
 
@@ -393,6 +404,7 @@ fit_model(generate_lookups_per_table(sensor_features_table) + generate_lookups_p
 from pyspark.sql.functions import col
 
 batch_input_df = spark.read.table(f"{dbName}.turbine_gold_for_ml")
+# compute_write
 with_predictions = fs.score_batch(f"models:/turbine_failure_model_{dbName}/2", batch_input_df, result_type='string')
 with_predictions = with_predictions.withColumn("Damaged_Predicted", col("prediction") == "True")
 display(with_predictions)
@@ -419,6 +431,7 @@ def compute_time_cyclical_features(data):
 
 # COMMAND ----------
 
+# DBTITLE 1,Plot as bar or pie chart
 display(compute_time_cyclical_features(dataset_cleanDF))
 
 # COMMAND ----------
@@ -459,8 +472,8 @@ from databricks.feature_store.online_store_spec import AmazonRdsMySqlSpec
 
 fs = FeatureStoreClient()
 
-hostname =  dbutils.secrets.get("iot-turbine", "mysql-hostname") # "iot-turbine-mysql.cmeifwaki1jl.us-west-2.rds.amazonaws.com"
-port =  int(dbutils.secrets.get("iot-turbine", "mysql-port")) # 3306
+hostname =  dbutils.secrets.get("iot-turbine", "mysql-hostname")
+port =  int(dbutils.secrets.get("iot-turbine", "mysql-port"))
 user = dbutils.secrets.get("iot-turbine", "mysql-username")
 password = dbutils.secrets.get("iot-turbine", "mysql-password")
 
