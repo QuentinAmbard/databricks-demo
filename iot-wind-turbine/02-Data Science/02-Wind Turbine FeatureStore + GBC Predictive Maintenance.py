@@ -53,13 +53,14 @@ dataset_raw = spark.read.table("turbine_gold_for_ml")
 # COMMAND ----------
 
 # DBTITLE 1,Define potential feature column-names and output
+key = "TIMESTAMP"
 sensor_features = ["AN3", "AN4", "AN5", "AN6", "AN7", "AN8", "AN9", "AN10", "SPEED", "TORQUE"]
 output = ["status"]
 
 # COMMAND ----------
 
 # DBTITLE 1,Drop duplicate Keys/ID
-dataset_cleanDF = dataset_raw.dropDuplicates(subset=["TIMESTAMP"])
+dataset_cleanDF = dataset_raw.dropDuplicates(subset=[key])
 
 # COMMAND ----------
 
@@ -112,22 +113,18 @@ df_dataset.isna().sum().plot(kind='bar')
 
 # COMMAND ----------
 
-# DBTITLE 1,Define sensor feature selection function
-from databricks.feature_store import feature_table
-
-sensor_features.remove("TORQUE")
-
-@feature_table
-def compute_sensor_features(data):
+# DBTITLE 1,Select sensor features of interest
+def compute_sensor_features(data, selected_features):
   """
   Select sensor data of interest + Key/ID column
   """
   
-  return data.select(["TIMESTAMP"] + sensor_features)
+  return data.select([key] + selected_features)
 
 # COMMAND ----------
 
-sensor_featuresDF = compute_sensor_features(dataset_cleanDF)
+sensor_features.remove("TORQUE")
+sensor_featuresDF = compute_sensor_features(dataset_cleanDF, sensor_features)
 
 # COMMAND ----------
 
@@ -137,15 +134,14 @@ sensor_featuresDF = compute_sensor_features(dataset_cleanDF)
 
 # COMMAND ----------
 
-from pyspark.sql.functions import month, dayofweek, hour, sin, cos
+from pyspark.sql.functions import month, hour, sin, cos
 import numpy as np
 
-@feature_table
 def compute_time_cyclical_features(data):
   """
   Extract month/hour and apply cyclical calculation
   """
-  return data.select("TIMESTAMP") \
+  return data.select(key) \
               .withColumn("Cos_Month", cos(2*np.pi*month("TIMESTAMP")/12)) \
               .withColumn("Sin_Month", sin(2*np.pi*month("TIMESTAMP")/12)) \
               .withColumn("Cos_Hour", cos(2*np.pi*hour("TIMESTAMP")/23)) \
@@ -159,25 +155,24 @@ display(season_featuresDF)
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Create output/feature
+# MAGIC ## Calculate target/response
 # MAGIC Binarize output
 
 # COMMAND ----------
 
-# DBTITLE 1,Primarily for keeping track of how output was calculated and then use for training
+# DBTITLE 0,Use for training
 from pyspark.sql.functions import col
 
-@feature_table
-def compute_damage_feature(data):
+def compute_damage_response(data):
   """
   Binarize status column
   """
   return data.withColumn("Damaged", col(output[0]) == "damaged") \
-             .select("TIMESTAMP", "Damaged")
+             .select(key, "Damaged")
 
 # COMMAND ----------
 
-outputDF = compute_damage_feature(dataset_cleanDF)
+outputDF = compute_damage_response(dataset_cleanDF)
 
 # COMMAND ----------
 
@@ -200,16 +195,14 @@ dbutils.widgets.text("db", dbName, "DB name")
 # MAGIC 
 # MAGIC USE TURBINE_FEATURES_${db};
 # MAGIC DROP TABLE IF exists SENSOR_FEATURES;
-# MAGIC DROP TABLE IF exists TIME_FEATURES;
-# MAGIC DROP TABLE IF exists OUTPUT_FEATURES;
+# MAGIC DROP TABLE IF exists SEASON_FEATURES;
 
 # COMMAND ----------
 
 # DBTITLE 1,Define database.table variable names
 fs_dbName = "TURBINE_FEATURES_{}".format(dbutils.widgets.get("db"))
 sensor_features_table_name = f"{fs_dbName}.SENSOR_FEATURES"
-season_features_table_name = f"{fs_dbName}.TIME_FEATURES"
-output_features_table_name = f"{fs_dbName}.OUTPUT_FEATURES"
+season_features_table_name = f"{fs_dbName}.SEASON_FEATURES"
 
 # COMMAND ----------
 
@@ -220,57 +213,42 @@ fs = FeatureStoreClient()
 
 sensor_features_table = fs.create_feature_table(
   name = sensor_features_table_name,
-  keys = 'TIMESTAMP',
+  keys = key,
   schema = sensor_featuresDF.schema,
   description = 'Raw sensor data and Torque/Speed'
 )
 
 time_features_table = fs.create_feature_table(
   name = season_features_table_name,
-  keys = 'TIMESTAMP',
+  keys = key,
   schema = season_featuresDF.schema,
-  description = 'Cyclical features calculated from Month and Hour'
-)
-
-output_feature_table = fs.create_feature_table(
-  name = output_features_table_name,
-  keys = 'TIMESTAMP',
-  schema = outputDF.schema,
-  description = 'Encoded output targets'
+  description = 'Seasonal/Cyclical features calculated from Month and Hour'
 )
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Compute and write features to offline store
-# MAGIC Use built-in `compute_and_write` method from `@feature_store` decorator which appends/updates data in the feature store table
+# MAGIC ## Write features to offline store
 
 # COMMAND ----------
 
-compute_sensor_features.compute_and_write(dataset_cleanDF, feature_table_name=sensor_features_table_name)
-compute_time_cyclical_features.compute_and_write(dataset_cleanDF, feature_table_name=season_features_table_name)
-
-# Output
-compute_damage_feature.compute_and_write(dataset_cleanDF, feature_table_name=output_features_table_name)
-
-# COMMAND ----------
-
+# DBTITLE 0,Preferred way
 # MAGIC %md
 # MAGIC If tables/sparkDataFrames are __already computed__ or a __streaming DataFrame__ then use `write_table` method:
 
 # COMMAND ----------
 
-# fs.write_table(
-#   name = sensor_features_table_name,
-#   df = sensor_featuresDF,
-#   mode = 'overwrite' # 'merge'
-# )
+fs.write_table(
+  name = sensor_features_table_name,
+  df = sensor_featuresDF,
+  mode = 'overwrite' # 'merge'
+)
 
-# fs.write_table(
-#   name = season_features_table_name,
-#   df = season_featuresDF,
-#   mode = 'overwrite' # 'merge'
-# )
+fs.write_table(
+  name = season_features_table_name,
+  df = season_featuresDF,
+  mode = 'overwrite' # 'merge'
+)
 
 # COMMAND ----------
 
@@ -326,16 +304,14 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder
 
 mlflow.autolog(log_input_examples=True) # Optional
-
 label = "Damaged"
-key = "TIMESTAMP"
+model_name = f"turbine_failure_model_{dbName}"
 
 # Define a method for reuse later
 def fit_model(model_feature_lookups, n_iter=10):
 
   with mlflow.start_run():
-    trainingIDs_w_label_df = spark.read.table(f"{fs_dbName}.OUTPUT_FEATURES")
-    training_set = fs.create_training_set(trainingIDs_w_label_df,
+    training_set = fs.create_training_set(outputDF,
                                           model_feature_lookups,
                                           label=label,
                                           exclude_columns=key)
@@ -363,14 +339,13 @@ def fit_model(model_feature_lookups, n_iter=10):
     mlflow.log_metric('test_accuracy', pipeline_model.score(X_test, y_test))
     # mlflow.shap.log_explanation(gb_classifier.predict, encoders.transform(X))
 
-    fs.log_model(
-      pipeline_model,
-      "model",
-      flavor=mlflow.sklearn,
-      training_set=training_set,
-      registered_model_name=f"turbine_failure_model_{dbName}",
-      input_example=X[:100],
-      signature=infer_signature(X, y))
+   fs.log_model(pipeline_model,
+                "model",
+                flavor=mlflow.sklearn,
+                training_set=training_set,
+                registered_model_name=model_name,
+                input_example=X[:100],
+                signature=infer_signature(X, y))
 
 # COMMAND ----------
 
@@ -392,6 +367,12 @@ fit_model(generate_lookups_per_table(sensor_features_table) + generate_lookups_p
 
 # COMMAND ----------
 
+# DBTITLE 1,Get latest model programmatically
+client = mlflow.tracking.MlflowClient()
+latest_model = client.get_latest_versions(model_name, stages=["None"])[0]
+
+# COMMAND ----------
+
 # MAGIC %md
 # MAGIC # Run batch inference
 # MAGIC Usinfg FS's `score_batch` method
@@ -400,12 +381,12 @@ fit_model(generate_lookups_per_table(sensor_features_table) + generate_lookups_p
 
 # COMMAND ----------
 
-# DBTITLE 1,Load version 2 (can also be /Staging or /Production)
+# DBTITLE 1,Load latest version (can also be /Staging or /Production)
 from pyspark.sql.functions import col
 
 batch_input_df = spark.read.table(f"{dbName}.turbine_gold_for_ml")
 # compute_write
-with_predictions = fs.score_batch(f"models:/turbine_failure_model_{dbName}/2", batch_input_df, result_type='string')
+with_predictions = fs.score_batch(f"models:/turbine_failure_model_{dbName}/{latest_model.version}", batch_input_df, result_type='string')
 with_predictions = with_predictions.withColumn("Damaged_Predicted", col("prediction") == "True")
 display(with_predictions)
 
@@ -417,12 +398,13 @@ display(with_predictions)
 
 # COMMAND ----------
 
-@feature_table
-def compute_time_cyclical_features(data):
+from pyspark.sql.functions import dayofweek
+
+def compute_time_cyclical_features_v2(data):
   """
   Extract month/hour and apply cyclical calculation and if day is a week-end
   """
-  return data.select("TIMESTAMP") \
+  return data.select(key) \
               .withColumn("Cos_Month", cos(2*np.pi*month("TIMESTAMP")/12)) \
               .withColumn("Sin_Month", sin(2*np.pi*month("TIMESTAMP")/12)) \
               .withColumn("Cos_Hour", cos(2*np.pi*hour("TIMESTAMP")/23)) \
@@ -431,8 +413,12 @@ def compute_time_cyclical_features(data):
 
 # COMMAND ----------
 
+season_v2_DF = compute_time_cyclical_features_v2(dataset_cleanDF)
+
+# COMMAND ----------
+
 # DBTITLE 1,Plot as bar or pie chart
-display(compute_time_cyclical_features(dataset_cleanDF))
+display(season_v2_DF)
 
 # COMMAND ----------
 
@@ -441,21 +427,23 @@ display(compute_time_cyclical_features(dataset_cleanDF))
 
 # COMMAND ----------
 
-compute_time_cyclical_features.compute_and_write(dataset_cleanDF,
-                                                 feature_table_name=season_features_table_name,
-                                                 mode="merge")
+fs.write_table(
+  name=season_features_table_name,
+  df=season_v2_DF,
+  mode="merge"
+)
 
 # COMMAND ----------
 
 # MAGIC %md
 # MAGIC # Reading feature data from a specific timestamp
-# MAGIC using 'as_of' time joins
+# MAGIC using `as_of_delta_timestamp` parameter (__Update with your specific timestamps__)
 
 # COMMAND ----------
 
 season_features_df_ = fs.read_table(
   name=season_features_table_name,
-  as_of_delta_timestamp="2021-10-22"
+  as_of_delta_timestamp="2021-10-28 21:15:00"
 )
 
 season_features_df_.printSchema()
