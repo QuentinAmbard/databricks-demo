@@ -1,4 +1,8 @@
+# DEPRECATED - NOT MAINTAINED
+This repo isn't maintained anymore. Refer to the internal Databricks demos for up-to-date resources
+
 # databricks-demo
+
 Simple demo for Databricks!
 
 Use [Databricks Projects](https://docs.databricks.com/projects.html) to clone this repo and get started with some Databricks demo:
