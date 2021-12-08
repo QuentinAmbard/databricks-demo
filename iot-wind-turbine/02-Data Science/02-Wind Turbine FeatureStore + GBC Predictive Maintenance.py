@@ -77,8 +77,8 @@ import matplotlib.pyplot as plt
 
 # COMMAND ----------
 
-# DBTITLE 1,Display summary statistics
-display(dataset_cleanDF[sensor_features].summary())
+# DBTITLE 1,Display summary statistics using Databrick's "summarize"
+dbutils.data.summarize(dataset_cleanDF[sensor_features+output])
 
 # COMMAND ----------
 
@@ -211,17 +211,19 @@ from databricks.feature_store import FeatureStoreClient
 
 fs = FeatureStoreClient()
 
-sensor_features_table = fs.create_feature_table(
+sensor_features_table = fs.create_table(
   name = sensor_features_table_name,
   keys = key,
   schema = sensor_featuresDF.schema,
+  #df = sensor_featuresDF, Create and write
   description = 'Raw sensor data and Torque/Speed'
 )
 
-time_features_table = fs.create_feature_table(
+time_features_table = fs.create_table(
   name = season_features_table_name,
   keys = key,
   schema = season_featuresDF.schema,
+  #df = season_featuresDF, Create and write
   description = 'Seasonal/Cyclical features calculated from Month and Hour'
 )
 
@@ -280,8 +282,8 @@ def generate_lookups_per_table(table, key="TIMESTAMP"):
 # DBTITLE 1,Get handle for feature tables
 # from databricks.feature_store import FeatureStoreClient
 # fs = FeatureStoreClient()
-sensor_features_table = fs.get_feature_table(sensor_features_table_name)
-season_features_table = fs.get_feature_table(season_features_table_name)
+sensor_features_table = fs.get_table(sensor_features_table_name)
+season_features_table = fs.get_table(season_features_table_name)
 
 # Get list of all FeatureLookup handles
 # all_feature_lookups = generate_lookups_per_table(sensor_features_table) + generate_lookups_per_table(season_features_table)
