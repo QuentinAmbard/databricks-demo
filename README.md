@@ -1,4 +1,4 @@
-# DEPRECATED - NOT MAINTAINED
+# DEPRECATED - NOT MAINTAINED - TEST
 This repo isn't maintained anymore. Refer to the internal Databricks demos for up-to-date resources
 
 # databricks-demo
