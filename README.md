@@ -1,5 +1,8 @@
 # DEPRECATED - NOT MAINTAINED
-This repo isn't maintained anymore. Refer to the internal Databricks demos for up-to-date resources
+
+ALL resources have been moved to dbdemos:  https://github.com/databricks-demos/dbdemos
+
+This repo isn't maintained anymore. Also refer to the internal Databricks demos for up-to-date resources
 
 # databricks-demo
 
